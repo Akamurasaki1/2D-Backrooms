@@ -116,6 +116,12 @@
                 align-items: center
             }
 
+            .list li .reason {
+                font-size: 12px;
+                color: var(--muted);
+                margin-left: 8px;
+            }
+
             .hint {
                 font-size: 13px;
                 color: var(--muted);
@@ -194,21 +200,28 @@
         <script>
             /* --- ここを編集してLevelと接続を定義 --- */
             const levels = [
+                { id: "Front Room", name: "Front Room" },
                 { id: "L0", name: "Level 0" },
                 { id: "L1", name: "Level 1" },
                 { id: "L2", name: "Level 2" },
                 { id: "L3", name: "Level 3" },
+                { id: "L4", name: "Level 4" },
+                { id: "L5", name: "Level 5" },
+                { id: "L6", name: "Level 6" },
                 { id: "L7", name: "Level 7" },
-                { id: "L9", name: "Level 9" }
+                { id: "L9", name: "Level 9" },
+                { id: "L10", name: "Level 10" }
             ];
 
             const links = [
-                { from: "L0", to: "L1" },
-                { from: "L1", to: "L2" },
-                { from: "L2", to: "L3" },
-                { from: "L3", to: "L1" },
-                { from: "L0", to: "L7" },
-                { from: "L7", to: "L9" }
+                { from: "Front Room", to: "L0", reason: "落下" },
+                { from: "L0", to: "Front Room", reason: "特定の壁" },
+                { from: "L1", to: "L0", reason: "扉" },
+                { from: "L1", to: "L2", reason: "階段" },
+                { from: "L2", to: "L3", reason: "暗い通路" },
+                { from: "L3", to: "L1", reason: "穴" },
+                { from: "L0", to: "L7", reason: "謎解きの通路" },
+                { from: "L7", to: "L9", reason: "エレベーター" }
             ];
             /* ---------------------------------------- */
 
@@ -242,6 +255,7 @@
                     g.classList.add('edge');
                     g.setAttribute('data-from', l.from);
                     g.setAttribute('data-to', l.to);
+                    g.setAttribute('data-reason', l.reason || '');
                     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                     // curved path
                     const dx = b.x - a.x, dy = b.y - a.y;
@@ -250,6 +264,14 @@
                     const d = `M ${a.x} ${a.y} Q ${cx1} ${cy1} ${b.x} ${b.y}`;
                     path.setAttribute('d', d);
                     g.appendChild(path);
+                    // edge hover shows reason and highlights
+                    g.addEventListener('mouseenter', e => {
+                        highlightEdge(l.from, l.to);
+                        showEdgeTooltip(l, e);
+                    });
+                    g.addEventListener('mouseleave', () => {
+                        if (!pinned) { clearHighlights(); hideTooltip(); }
+                    });
                     svg.appendChild(g);
                 });
 
@@ -276,8 +298,7 @@
                         showTooltip(lv, e);
                     });
                     g.addEventListener('mouseleave', e => {
-                        clearHighlights();
-                        hideTooltip();
+                        if (!pinned) { clearHighlights(); hideTooltip(); }
                     });
                     g.addEventListener('click', e => {
                         togglePin(lv.id);
@@ -291,12 +312,20 @@
                 linkList.innerHTML = '';
                 links.forEach(l => {
                     const li = document.createElement('li');
-                    li.textContent = `${findName(l.from)} → ${findName(l.to)}`;
-                    li.addEventListener('mouseenter', () => {
+                    li.innerHTML = `<div>${findName(l.from)} → ${findName(l.to)}</div><div class="reason">${l.reason || ''}</div>`;
+                    li.addEventListener('mouseenter', (e) => {
                         highlightEdge(l.from, l.to);
+                        showEdgeTooltip(l, e);
                     });
                     li.addEventListener('mouseleave', () => {
-                        clearHighlights();
+                        if (!pinned) { clearHighlights(); hideTooltip(); }
+                    });
+                    li.addEventListener('click', () => {
+                        // pin when clicked from list
+                        pinned = `${l.from}→${l.to}`;
+                        highlightEdge(l.from, l.to);
+                        // show tooltip near the list item
+                        showEdgeTooltip(l, { clientX: linkList.getBoundingClientRect().left + 8, clientY: li.getBoundingClientRect().top + 8 });
                     });
                     linkList.appendChild(li);
                 });
@@ -337,12 +366,22 @@
 
             function showTooltip(lv, event) {
                 tooltip.style.display = 'block';
-                tooltip.textContent = `${lv.name} (${lv.id})`;
-                // list connections
-                const outs = links.filter(x => x.from === lv.id).map(x => findName(x.to));
-                const ins = links.filter(x => x.to === lv.id).map(x => findName(x.from));
-                if (outs.length) tooltip.textContent += " → " + outs.join(', ');
-                if (ins.length) tooltip.textContent += " ← " + ins.join(', ');
+                // build html with reasons
+                const outs = links.filter(x => x.from === lv.id).map(x => `${findName(x.to)} (${x.reason || ''})`);
+                const ins = links.filter(x => x.to === lv.id).map(x => `${findName(x.from)} (${x.reason || ''})`);
+                let html = `<strong>${lv.name}</strong> <small>(${lv.id})</small><br/>`;
+                if (outs.length) html += `→ ${outs.join(', ')}<br/>`;
+                if (ins.length) html += `← ${ins.join(', ')}<br/>`;
+                tooltip.innerHTML = html;
+                const rect = svg.getBoundingClientRect();
+                const ev = event.clientX !== undefined ? event : { clientX: event.x, clientY: event.y };
+                tooltip.style.left = (ev.clientX - rect.left) + "px";
+                tooltip.style.top = (ev.clientY - rect.top - 12) + "px";
+            }
+
+            function showEdgeTooltip(link, event) {
+                tooltip.style.display = 'block';
+                tooltip.innerHTML = `<strong>${findName(link.from)} → ${findName(link.to)}</strong><br/><span class="reason">${link.reason || '（理由なし）'}</span>`;
                 const rect = svg.getBoundingClientRect();
                 const ev = event.clientX !== undefined ? event : { clientX: event.x, clientY: event.y };
                 tooltip.style.left = (ev.clientX - rect.left) + "px";
@@ -372,7 +411,7 @@
 
             /* Optional: allow editing via console:
                  levels.push({id:"L10", name:"Level 10"});
-                 links.push({from:"L3", to:"L10"});
+                 links.push({from:"L3", to:"L10", reason:"入口"});
                  render();
             */
         </script>
