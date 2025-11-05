@@ -6,7 +6,30 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Level0</title>
         <!-- <link rel="stylesheet" href="style1.css"> -->
+        <style>
+            /* 画面上で視認できない戻るボタン */
+            .invis-back-btn {
+                position: fixed;
+                right: 12px;
+                bottom: 12px;
+                width: 48px;
+                height: 48px;
+                background: transparent;
+                border: none;
+                padding: 0;
+                margin: 0;
+                cursor: pointer;
+                opacity: 0;
+                /* 完全に不可視 */
+            }
 
+            /* フォーカス時は視認可能にしたい場合は以下を有効化（アクセシビリティ用） */
+            .invis-back-btn:focus {
+                outline: 2px dashed rgba(125, 211, 252, 0.6);
+                opacity: 1;
+                background: rgba(125, 211, 252, 0.06);
+            }
+        </style>
     </head>
 
     <body>
@@ -19,9 +42,13 @@
                 <p>これはLevel 0の段落です。ここにLevel 0の説明が表示されます。</p>
             </section>
         </main>
+        <!-- 不可視の戻るボタン（クリックで index.html に戻る） -->
+        <button class="invis-back-btn" aria-label="トップに戻る" onclick="location.href='index.html'"></button>
         <footer>
             <p>Level 0 wikidot link:<a href="https://backrooms-wiki.wikidot.com/level-0">link</a></p>
             <p>Level 0 Fandom link:<a href="https://backrooms.fandom.com/ja/wiki/Level_0_(1)">link</a></p>
             <p>&copy; A / Murasaki 2025</p>
         </footer>
     </body>
+
+</html>
