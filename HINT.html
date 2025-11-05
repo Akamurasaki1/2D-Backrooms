@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="ja">
+
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Backrooms Level Map - HINT</title>
+        <style>
+            :root {
+                --bg: #0b0f13;
+                --card: #0f1720;
+                --accent: #7dd3fc;
+                --muted: #94a3b8
+            }
+
+            html,
+            body {
+                height: 100%;
+                margin: 0;
+                font-family: system-ui, -apple-system, Segoe UI, Roboto, "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+                background: linear-gradient(180deg, #040609 0%, #071019 100%);
+                color: #e6eef6
+            }
+
+            .wrap {
+                display: flex;
+                gap: 16px;
+                padding: 20px;
+                box-sizing: border-box;
+                height: 100%
+            }
+
+            .map {
+                flex: 1;
+                background: rgba(255, 255, 255, 0.03);
+                border-radius: 8px;
+                padding: 12px;
+                position: relative;
+                min-width: 320px
+            }
+
+            svg {
+                width: 100%;
+                height: 100%
+            }
+
+            .panel {
+                width: 300px;
+                background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01));
+                border-radius: 8px;
+                padding: 12px;
+                box-sizing: border-box;
+                overflow: auto
+            }
+
+            h1 {
+                font-size: 16px;
+                margin: 0 0 8px 0
+            }
+
+            .legend {
+                font-size: 13px;
+                color: var(--muted);
+                margin-bottom: 8px
+            }
+
+            .node {
+                cursor: pointer
+            }
+
+            .node circle {
+                fill: var(--card);
+                stroke: var(--muted);
+                stroke-width: 1.5
+            }
+
+            .node text {
+                pointer-events: none;
+                fill: #e6eef6;
+                font-size: 12px
+            }
+
+            .edge {
+                stroke: rgba(125, 211, 252, 0.25);
+                stroke-width: 2;
+                marker-end: url(#arrow)
+            }
+
+            .edge.highlight {
+                stroke: var(--accent);
+                stroke-width: 3;
+                opacity: 1
+            }
+
+            .node.highlight circle {
+                stroke: var(--accent);
+                stroke-width: 2.5;
+                fill: rgba(125, 211, 252, 0.06)
+            }
+
+            .list {
+                font-size: 13px;
+                color: #dbeafe;
+                margin: 0;
+                padding: 0;
+                list-style: none
+            }
+
+            .list li {
+                padding: 6px 8px;
+                border-radius: 6px;
+                margin-bottom: 6px;
+                background: rgba(255, 255, 255, 0.02);
+                display: flex;
+                justify-content: space-between;
+                align-items: center
+            }
+
+            .hint {
+                font-size: 13px;
+                color: var(--muted);
+                margin-top: 8px
+            }
+
+            .btn {
+                background: transparent;
+                border: 1px solid rgba(255, 255, 255, 0.04);
+                color: #dbeafe;
+                padding: 6px 8px;
+                border-radius: 6px;
+                cursor: pointer
+            }
+
+            .btn:active {
+                transform: translateY(1px)
+            }
+
+            .footer {
+                margin-top: 10px;
+                font-size: 12px;
+                color: var(--muted)
+            }
+
+            .tooltip {
+                position: absolute;
+                background: #031524;
+                border: 1px solid rgba(125, 211, 252, 0.12);
+                padding: 6px 8px;
+                border-radius: 6px;
+                color: #cfeefd;
+                font-size: 13px;
+                pointer-events: none;
+                transform: translate(-50%, -120%);
+                white-space: nowrap;
+                display: none
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="wrap">
+            <div class="map" id="map">
+                <svg id="svgmap" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet">
+                    <defs>
+                        <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"
+                            markerUnits="strokeWidth">
+                            <path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc" />
+                        </marker>
+                    </defs>
+                    <!-- edges and nodes injected by script -->
+                </svg>
+                <div class="tooltip" id="tooltip"></div>
+            </div>
+
+            <div class="panel">
+                <h1>接続ヒントマップ</h1>
+                <div class="legend">ノードをクリック/ホバーすると、そのLevelから繋がる先をハイライトします。</div>
+
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+                    <button class="btn" id="shuffle">配置をランダム</button>
+                    <button class="btn" id="reset">リセット表示</button>
+                </div>
+
+                <strong>接続一覧</strong>
+                <ul class="list" id="linkList"></ul>
+
+                <div class="hint">
+                    ※ データは下部のスクリプトで編集できます。Level名・接続を追加してマップを作成してください。
+                </div>
+                <div class="footer">HINT.html — Backrooms Map</div>
+            </div>
+        </div>
+
+        <script>
+            /* --- ここを編集してLevelと接続を定義 --- */
+            const levels = [
+                { id: "L0", name: "Level 0" },
+                { id: "L1", name: "Level 1" },
+                { id: "L2", name: "Level 2" },
+                { id: "L3", name: "Level 3" },
+                { id: "L7", name: "Level 7" },
+                { id: "L9", name: "Level 9" }
+            ];
+
+            const links = [
+                { from: "L0", to: "L1" },
+                { from: "L1", to: "L2" },
+                { from: "L2", to: "L3" },
+                { from: "L3", to: "L1" },
+                { from: "L0", to: "L7" },
+                { from: "L7", to: "L9" }
+            ];
+            /* ---------------------------------------- */
+
+            const svg = document.getElementById('svgmap');
+            const tooltip = document.getElementById('tooltip');
+            const linkList = document.getElementById('linkList');
+            let positions = {};
+
+            // place nodes roughly in a circle
+            function computePositions(radiusX = 380, radiusY = 250) {
+                const cx = 500, cy = 350;
+                const n = levels.length;
+                const pos = {};
+                for (let i = 0; i < n; i++) {
+                    const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+                    pos[levels[i].id] = {
+                        x: cx + Math.cos(angle) * radiusX * (0.8 + Math.random() * 0.4),
+                        y: cy + Math.sin(angle) * radiusY * (0.8 + Math.random() * 0.4)
+                    };
+                }
+                return pos;
+            }
+
+            function render() {
+                svg.querySelectorAll('.edge,.node').forEach(e => e.remove());
+                positions = computePositions();
+                // draw edges
+                links.forEach((l, i) => {
+                    const a = positions[l.from], b = positions[l.to];
+                    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    g.classList.add('edge');
+                    g.setAttribute('data-from', l.from);
+                    g.setAttribute('data-to', l.to);
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    // curved path
+                    const dx = b.x - a.x, dy = b.y - a.y;
+                    const mx = a.x + dx * 0.5, my = a.y + dy * 0.5;
+                    const cx1 = mx - dy * 0.12, cy1 = my + dx * 0.12;
+                    const d = `M ${a.x} ${a.y} Q ${cx1} ${cy1} ${b.x} ${b.y}`;
+                    path.setAttribute('d', d);
+                    g.appendChild(path);
+                    svg.appendChild(g);
+                });
+
+                // draw nodes on top
+                levels.forEach(lv => {
+                    const p = positions[lv.id];
+                    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    g.classList.add('node');
+                    g.setAttribute('data-id', lv.id);
+                    g.setAttribute('transform', `translate(${p.x},${p.y})`);
+                    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    circle.setAttribute('r', 34);
+                    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    text.setAttribute('x', 0);
+                    text.setAttribute('y', 4);
+                    text.setAttribute('text-anchor', 'middle');
+                    text.textContent = lv.name;
+                    g.appendChild(circle);
+                    g.appendChild(text);
+                    svg.appendChild(g);
+
+                    g.addEventListener('mouseenter', e => {
+                        highlightNode(lv.id);
+                        showTooltip(lv, e);
+                    });
+                    g.addEventListener('mouseleave', e => {
+                        clearHighlights();
+                        hideTooltip();
+                    });
+                    g.addEventListener('click', e => {
+                        togglePin(lv.id);
+                    });
+                });
+
+                populateList();
+            }
+
+            function populateList() {
+                linkList.innerHTML = '';
+                links.forEach(l => {
+                    const li = document.createElement('li');
+                    li.textContent = `${findName(l.from)} → ${findName(l.to)}`;
+                    li.addEventListener('mouseenter', () => {
+                        highlightEdge(l.from, l.to);
+                    });
+                    li.addEventListener('mouseleave', () => {
+                        clearHighlights();
+                    });
+                    linkList.appendChild(li);
+                });
+            }
+
+            function findName(id) { const it = levels.find(x => x.id === id); return it ? it.name : id }
+
+            function highlightNode(id) {
+                clearHighlights();
+                // highlight node
+                const node = svg.querySelector(`.node[data-id="${id}"]`);
+                if (node) node.classList.add('highlight');
+                // highlight outgoing edges
+                svg.querySelectorAll(`.edge[data-from="${id}"]`).forEach(e => e.classList.add('highlight'));
+                // highlight incoming edges
+                svg.querySelectorAll(`.edge[data-to="${id}"]`).forEach(e => {
+                    e.classList.add('highlight');
+                    // also highlight source node
+                    const from = e.getAttribute('data-from');
+                    const src = svg.querySelector(`.node[data-id="${from}"]`);
+                    if (src) src.classList.add('highlight');
+                });
+            }
+
+            function highlightEdge(from, to) {
+                clearHighlights();
+                svg.querySelectorAll(`.edge[data-from="${from}"][data-to="${to}"]`).forEach(e => e.classList.add('highlight'));
+                const n1 = svg.querySelector(`.node[data-id="${from}"]`);
+                const n2 = svg.querySelector(`.node[data-id="${to}"]`);
+                if (n1) n1.classList.add('highlight');
+                if (n2) n2.classList.add('highlight');
+            }
+
+            function clearHighlights() {
+                svg.querySelectorAll('.edge.highlight').forEach(e => e.classList.remove('highlight'));
+                svg.querySelectorAll('.node.highlight').forEach(n => n.classList.remove('highlight'));
+            }
+
+            function showTooltip(lv, event) {
+                tooltip.style.display = 'block';
+                tooltip.textContent = `${lv.name} (${lv.id})`;
+                // list connections
+                const outs = links.filter(x => x.from === lv.id).map(x => findName(x.to));
+                const ins = links.filter(x => x.to === lv.id).map(x => findName(x.from));
+                if (outs.length) tooltip.textContent += " → " + outs.join(', ');
+                if (ins.length) tooltip.textContent += " ← " + ins.join(', ');
+                const rect = svg.getBoundingClientRect();
+                const ev = event.clientX !== undefined ? event : { clientX: event.x, clientY: event.y };
+                tooltip.style.left = (ev.clientX - rect.left) + "px";
+                tooltip.style.top = (ev.clientY - rect.top - 12) + "px";
+            }
+
+            function hideTooltip() { tooltip.style.display = 'none' }
+
+            let pinned = null;
+            function togglePin(id) {
+                if (pinned === id) { pinned = null; clearHighlights(); hideTooltip(); return; }
+                pinned = id;
+                highlightNode(id);
+            }
+
+            // buttons
+            document.getElementById('shuffle').addEventListener('click', () => {
+                positions = computePositions();
+                render();
+            });
+            document.getElementById('reset').addEventListener('click', () => {
+                pinned = null; clearHighlights(); hideTooltip();
+            });
+
+            /* initial render */
+            render();
+
+            /* Optional: allow editing via console:
+                 levels.push({id:"L10", name:"Level 10"});
+                 links.push({from:"L3", to:"L10"});
+                 render();
+            */
+        </script>
+    </body>
+
+</html>
