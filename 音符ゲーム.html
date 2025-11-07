@@ -89,12 +89,22 @@
                 ctx.globalAlpha = 1.0;
             }
 
-            // ランダムで音符を落とす
+            // キー操作（左/右で仮音符移動、Space/下で仮音符を落とす）
+            document.removeEventListener && document.removeEventListener("keydown", null); // 保険（古いハンドラが残る環境対策）
             document.addEventListener("keydown", e => {
-                if (e.code === "Space") {
-                    // ランダムな最小音符
-                    const note = createNote(0, 200, 30);
+                if (e.code === "ArrowLeft") {
+                    pendingNoteX = Math.max(pendingNoteX - 20, 50); // 左端制限
+                    e.preventDefault();
+                } else if (e.code === "ArrowRight") {
+                    pendingNoteX = Math.min(pendingNoteX + 20, 350); // 右端制限
+                    e.preventDefault();
+                } else if (e.code === "Space" || e.code === "ArrowDown") {
+                    // 仮音符を物理Worldに追加して落下（単一ハンドラでのみ追加）
+                    const note = createNote(pendingNoteType, pendingNoteX, pendingNoteY);
                     World.add(world, note);
+                    // 次の仮音符初期化
+                    pendingNoteX = 200;
+                    e.preventDefault();
                 }
             });
 
