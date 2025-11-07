@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+    <head>
+        <meta charset="UTF-8">
+        <title>音符ゲーム（スイカゲーム風）</title>
+        <style>
+            canvas {
+                background: #fff;
+                display: block;
+                margin: 0 auto;
+            }
+        </style>
+    </head>
+
+    <body>
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+        <script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
+        <script>
+            const { Engine, Render, Runner, World, Bodies, Body, Events } = Matter;
+
+            // 音符タイプの定義
+            const noteTypes = [
+                { name: "16分音符", radius: 15, next: 1, color: "#aaf" },
+                { name: "8分音符", radius: 25, next: 2, color: "#55f" },
+                { name: "4分音符", radius: 35, next: 3, color: "#5f5" },
+                { name: "2分音符", radius: 45, next: 4, color: "#fa5" },
+                { name: "1分音符", radius: 60, next: null, color: "#f55" }, // 最大
+            ];
+
+            const engine = Engine.create();
+            const world = engine.world;
+            const canvas = document.getElementById("gameCanvas");
+            const render = Render.create({
+                canvas: canvas,
+                engine: engine,
+                options: {
+                    width: 400,
+                    height: 600,
+                    wireframes: false,
+                    background: '#fff'
+                }
+            });
+
+            // 地面・壁
+            World.add(world, [
+                Bodies.rectangle(200, 600, 400, 50, { isStatic: true }),
+                Bodies.rectangle(0, 300, 50, 600, { isStatic: true }),
+                Bodies.rectangle(400, 300, 50, 600, { isStatic: true }),
+            ]);
+
+            // 音符を生成
+            function createNote(typeIndex, x, y) {
+                const type = noteTypes[typeIndex];
+                return Bodies.circle(x, y, type.radius, {
+                    label: "note",
+                    render: {
+                        fillStyle: type.color
+                    },
+                    noteType: typeIndex
+                });
+            }
+
+            // ランダムで音符を落とす
+            document.addEventListener("keydown", e => {
+                if (e.code === "Space") {
+                    // ランダムな最小音符
+                    const note = createNote(0, 200, 30);
+                    World.add(world, note);
+                }
+            });
+
+            // 合体判定
+            Events.on(engine, "collisionStart", event => {
+                event.pairs.forEach(pair => {
+                    const a = pair.bodyA;
+                    const b = pair.bodyB;
+                    if (a.label === "note" && b.label === "note" && a.noteType === b.noteType && a.noteType < noteTypes.length - 1) {
+                        // 合体！次の音符を作る
+                        const nextType = noteTypes[a.noteType].next;
+                        const newNote = createNote(nextType, (a.position.x + b.position.x) / 2, (a.position.y + b.position.y) / 2);
+                        World.add(world, newNote);
+                        // もとの音符を消す
+                        World.remove(world, [a, b]);
+                    }
+                });
+            });
+
+            Render.run(render);
+            Runner.run(Runner.create(), engine);
+        </script>
+        <p>スペースキーで音符を落とす</p>
+    </body>
+
+</html>
