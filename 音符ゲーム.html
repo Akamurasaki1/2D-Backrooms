@@ -62,7 +62,11 @@
             }// 仮音符（Canvas描画＋座標のみ管理）
             let pendingNoteX = 200; // 初期位置（画面中央）
             const pendingNoteY = 30;
-            const pendingNoteType = 0;
+            // 4種類のうちからランダムに選ぶ (index 0..3)
+            function pickRandomPendingType() {
+                return Math.floor(Math.random() * 4);
+            }
+            let pendingNoteType = pickRandomPendingType();
 
             // 仮音符のCanvas描画（毎フレーム）
             function drawPendingNote(ctx) {
@@ -110,6 +114,8 @@
                     // 仮音符を物理Worldに追加して落下（単一ハンドラでのみ追加）
                     const note = createNote(pendingNoteType, pendingNoteX, pendingNoteY);
                     World.add(world, note);
+                    // 次の仮音符種類をランダムに更新
+                    pendingNoteType = pickRandomPendingType();
                     e.preventDefault();
                 }
             });
