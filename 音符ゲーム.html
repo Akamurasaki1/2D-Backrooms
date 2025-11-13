@@ -44,24 +44,48 @@
                 }
             });
 
-            // 地面・壁
-            World.add(world, [
-                Bodies.rectangle(200, 600, 400, 50, { isStatic: true }),
-                Bodies.rectangle(0, 300, 50, 600, { isStatic: true }),
-                Bodies.rectangle(400, 300, 50, 600, { isStatic: true }),
-            ]);
+            // カテゴリ定義（衝突フィルタで内部/外部を切り替える）
+            const CATEGORY_OUTER = 0x0001;      // キャンバス外枠（床・外壁）
+            const CATEGORY_CONTAINER = 0x0002;  // 内部の「枠」壁（左・右・底）
+            const CATEGORY_NOTE = 0x0004;       // 音符
+            const NOTE_MASK_INSIDE = CATEGORY_OUTER | CATEGORY_CONTAINER | CATEGORY_NOTE;
+            const NOTE_MASK_OUTSIDE = CATEGORY_OUTER | CATEGORY_NOTE;
 
-            // 音符を生成
+            // 外枠（画面端に置く静的壁） - こぼれた音符はこの範囲で自由落下する
+            const outerFloor = Bodies.rectangle(200, 600, 400, 50, { isStatic: true, collisionFilter: { category: CATEGORY_OUTER } });
+            const outerLeft = Bodies.rectangle(0, 300, 50, 600, { isStatic: true, collisionFilter: { category: CATEGORY_OUTER } });
+            const outerRight = Bodies.rectangle(400, 300, 50, 600, { isStatic: true, collisionFilter: { category: CATEGORY_OUTER } });
+
+            // 内部の「枠」：左右と底だけ（上は開口）
+            // コンテナはキャンバス中央寄りに小さめで定義（必要に応じて位置/サイズを調整）
+            const containerWidth = 200;
+            const containerLeftX = 200 - containerWidth / 2;
+            const containerRightX = 200 + containerWidth / 2;
+            const containerTopY = 120;   // 「枠」の上端（ここを越えると外部へこぼれる扱い）
+            const containerBottomY = 480; // 枠の底（床）
+            const containerHeight = containerBottomY - containerTopY;
+            const containerLeft = Bodies.rectangle(containerLeftX, (containerTopY + containerBottomY) / 2, 40, containerHeight, { isStatic: true, collisionFilter: { category: CATEGORY_CONTAINER } });
+            const containerRight = Bodies.rectangle(containerRightX, (containerTopY + containerBottomY) / 2, 40, containerHeight, { isStatic: true, collisionFilter: { category: CATEGORY_CONTAINER } });
+            const containerBottom = Bodies.rectangle(200, containerBottomY, containerWidth, 40, { isStatic: true, collisionFilter: { category: CATEGORY_CONTAINER } });
+
+            World.add(world, [outerFloor, outerLeft, outerRight, containerLeft, containerRight, containerBottom]);
+
+            // 音符を生成（生成直後は内部用のマスクを付ける）
             function createNote(typeIndex, x, y) {
                 const type = noteTypes[typeIndex];
-                return Bodies.circle(x, y, type.radius, {
+                const body = Bodies.circle(x, y, type.radius, {
                     label: "note",
-                    render: {
-                        fillStyle: type.color
-                    },
-                    noteType: typeIndex
+                    render: { fillStyle: type.color },
+                    noteType: typeIndex,
+                    collisionFilter: {
+                        category: CATEGORY_NOTE,
+                        mask: NOTE_MASK_INSIDE
+                    }
                 });
-            }// 仮音符（Canvas描画＋座標のみ管理）
+                return body;
+            }
+
+            // 仮音符（Canvas描画＋座標のみ管理）
             let pendingNoteX = 200; // 初期位置（画面中央）
             const pendingNoteY = 30;
             // 4種類のうちからランダムに選ぶ (index 0..3)
@@ -81,50 +105,60 @@
                 ctx.globalAlpha = 1.0;
             }
 
-            // --- 変更: 上空からの生成をやめ、常に画面内の表示位置から生成する ---
-            -            function getTopmostNoteY() {
-                -                const notes = world.bodies.filter(b => b.label === "note");
-                -                if (!notes.length) return Infinity;
-                -                // 各ノートの上端 (中心 - 半径) を計算して最小値を返す
-                    -                return Math.min(...notes.map(n => {
-                        -                    const r = n.circleRadius || ((n.bounds.max.y - n.bounds.min.y) / 2);
-                        -                    return n.position.y - r;
-                        -                }));
-                -            }
-                -
-                -            function computeSpawnY() {
-                    -                const topY = getTopmostNoteY();
-                    -                const THRESHOLD = 80; // この値より上（小さいY）にノートがあると上から溢れる扱いにする
-                    -                if (topY <= THRESHOLD) {
-                        -                    // 上空（キャンバス外）からランダム高さで落とす
-                            -                    return - (20 + Math.random() * 120);
-                        -                }
-                    -                // 通常は仮音符の表示位置から落とす
-                        -                return pendingNoteY;
-                    -            }
-                +            // 常に画面内の表示位置（pendingNoteY）から生成する。
-                +            // これにより「上空から出す」挙動はなくなり、
-                +            // 画面外へ溢れた分は物理挙動のままその場で動き、画面枠から落ちていきます。
-                +            function computeSpawnY() {
-                    +                return pendingNoteY;
-                    +            }
-                -            // --- 追加ここまで ---
-                +            // --- 変更ここまで ---
+            // --- 実装: 「枠内」で生成し、枠の上端を越えたら枠との衝突を無効にしてキャンバス全体で自由落下させる ---
+            // 常に画面内の表示位置（pendingNoteY）から生成する。
+            // これにより「上空から出す」挙動はなくなり、
+            // 画面外へ溢れた分は物理挙動のままその場で動き、画面枠から落ちていきます。
+            function computeSpawnY() {
+                return pendingNoteY;
+            }
+            // --- 変更ここまで ---
 
-                // 落下位置を示す縦線を描画
-                function drawGuideLine(ctx) {
-                    const h = render.options && render.options.height ? render.options.height : canvas.height;
-                    ctx.save();
-                    ctx.strokeStyle = 'rgba(85,85,255,0.6)';
-                    ctx.lineWidth = 2;
-                    ctx.setLineDash([6, 6]);
-                    ctx.beginPath();
-                    ctx.moveTo(pendingNoteX, 0);
-                    ctx.lineTo(pendingNoteX, h);
-                    ctx.stroke();
-                    ctx.setLineDash([]);
-                    ctx.restore();
+            // ノートが枠の上端を越えたら枠壁との衝突を無効化する（溢れた扱い）
+            function updateNoteCollisionFilter(note) {
+                if (!note || note.label !== "note") return;
+                const r = note.circleRadius || ((note.bounds.max.y - note.bounds.min.y) / 2);
+                // note.position.y - r が枠の上端より上（小さい）なら溢れた
+                if (note.position.y - r < containerTopY) {
+                    // 既に外部用マスクなら何もしない
+                    if (note.collisionFilter.mask !== NOTE_MASK_OUTSIDE) {
+                        note.collisionFilter.mask = NOTE_MASK_OUTSIDE;
+                    }
+                } else {
+                    // 枠内に戻ったら（稀）枠内マスクに戻す
+                    if (note.collisionFilter.mask !== NOTE_MASK_INSIDE) {
+                        note.collisionFilter.mask = NOTE_MASK_INSIDE;
+                    }
                 }
+            }
+
+            // 毎フレーム、全ノートをチェックして枠の上端を越えていれば衝突マスクを切り替える
+            Events.on(engine, 'beforeUpdate', function () {
+                world.bodies.forEach(b => {
+                    if (b.label === 'note') updateNoteCollisionFilter(b);
+                });
+            });
+
+            // 合体で作られるノートも位置に応じてマスクを調整するため、追加後に更新する
+            function addNoteToWorld(note) {
+                World.add(world, note);
+                updateNoteCollisionFilter(note);
+            }
+
+            // 落下位置を示す縦線を描画
+            function drawGuideLine(ctx) {
+                const h = render.options && render.options.height ? render.options.height : canvas.height;
+                ctx.save();
+                ctx.strokeStyle = 'rgba(85,85,255,0.6)';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([6, 6]);
+                ctx.beginPath();
+                ctx.moveTo(pendingNoteX, 0);
+                ctx.lineTo(pendingNoteX, h);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.restore();
+            }
 
             // Render の描画後にガイド線と仮音符を描く
             Events.on(render, 'afterRender', function () {
@@ -146,7 +180,7 @@
                     // 画面内のスタック状態を見て、必要なら上空から落とす
                     const spawnY = computeSpawnY();
                     const note = createNote(pendingNoteType, pendingNoteX, spawnY);
-                    World.add(world, note);
+                    addNoteToWorld(note);
                     // 次の仮音符種類をランダムに更新
                     pendingNoteType = pickRandomPendingType();
                     e.preventDefault();
@@ -162,7 +196,8 @@
                         // 合体！次の音符を作る
                         const nextType = noteTypes[a.noteType].next;
                         const newNote = createNote(nextType, (a.position.x + b.position.x) / 2, (a.position.y + b.position.y) / 2);
-                        World.add(world, newNote);
+                        // 追加はラッパー経由で衝突フィルタを適用
+                        addNoteToWorld(newNote);
                         // もとの音符を消す
                         World.remove(world, [a, b]);
                     }
