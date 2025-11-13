@@ -76,10 +76,33 @@
                 ctx.beginPath();
                 ctx.arc(pendingNoteX, pendingNoteY, type.radius, 0, 2 * Math.PI);
                 ctx.fillStyle = type.color;
-                ctx.globalAlpha = 0.6; // 半透明など
+                ctx.globalAlpha = 0.8; // 半透明など
                 ctx.fill();
                 ctx.globalAlpha = 1.0;
             }
+
+            // --- 追加: スタックが上まで来たら上空から落ちてくるようにする ---
+            function getTopmostNoteY() {
+                const notes = world.bodies.filter(b => b.label === "note");
+                if (!notes.length) return Infinity;
+                // 各ノートの上端 (中心 - 半径) を計算して最小値を返す
+                return Math.min(...notes.map(n => {
+                    const r = n.circleRadius || ((n.bounds.max.y - n.bounds.min.y) / 2);
+                    return n.position.y - r;
+                }));
+            }
+
+            function computeSpawnY() {
+                const topY = getTopmostNoteY();
+                const THRESHOLD = 80; // この値より上（小さいY）にノートがあると上から溢れる扱いにする
+                if (topY <= THRESHOLD) {
+                    // 上空（キャンバス外）からランダム高さで落とす
+                    return - (20 + Math.random() * 120);
+                }
+                // 通常は仮音符の表示位置から落とす
+                return pendingNoteY;
+            }
+            // --- 追加ここまで ---
 
             // 落下位置を示す縦線を描画
             function drawGuideLine(ctx) {
@@ -113,8 +136,9 @@
                     pendingNoteX = Math.min(pendingNoteX + 20, 350); // 右端制限
                     e.preventDefault();
                 } else if (e.code === "Space" || e.code === "ArrowDown") {
-                    // 仮音符を物理Worldに追加して落下（単一ハンドラでのみ追加）
-                    const note = createNote(pendingNoteType, pendingNoteX, pendingNoteY);
+                    // 画面内のスタック状態を見て、必要なら上空から落とす
+                    const spawnY = computeSpawnY();
+                    const note = createNote(pendingNoteType, pendingNoteX, spawnY);
                     World.add(world, note);
                     // 次の仮音符種類をランダムに更新
                     pendingNoteType = pickRandomPendingType();
