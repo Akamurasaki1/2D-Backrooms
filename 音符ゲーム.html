@@ -81,43 +81,50 @@
                 ctx.globalAlpha = 1.0;
             }
 
-            // --- 追加: スタックが上まで来たら上空から落ちてくるようにする ---
-            function getTopmostNoteY() {
-                const notes = world.bodies.filter(b => b.label === "note");
-                if (!notes.length) return Infinity;
-                // 各ノートの上端 (中心 - 半径) を計算して最小値を返す
-                return Math.min(...notes.map(n => {
-                    const r = n.circleRadius || ((n.bounds.max.y - n.bounds.min.y) / 2);
-                    return n.position.y - r;
-                }));
-            }
+            // --- 変更: 上空からの生成をやめ、常に画面内の表示位置から生成する ---
+            -            function getTopmostNoteY() {
+                -                const notes = world.bodies.filter(b => b.label === "note");
+                -                if (!notes.length) return Infinity;
+                -                // 各ノートの上端 (中心 - 半径) を計算して最小値を返す
+                    -                return Math.min(...notes.map(n => {
+                        -                    const r = n.circleRadius || ((n.bounds.max.y - n.bounds.min.y) / 2);
+                        -                    return n.position.y - r;
+                        -                }));
+                -            }
+                -
+                -            function computeSpawnY() {
+                    -                const topY = getTopmostNoteY();
+                    -                const THRESHOLD = 80; // この値より上（小さいY）にノートがあると上から溢れる扱いにする
+                    -                if (topY <= THRESHOLD) {
+                        -                    // 上空（キャンバス外）からランダム高さで落とす
+                            -                    return - (20 + Math.random() * 120);
+                        -                }
+                    -                // 通常は仮音符の表示位置から落とす
+                        -                return pendingNoteY;
+                    -            }
+                +            // 常に画面内の表示位置（pendingNoteY）から生成する。
+                +            // これにより「上空から出す」挙動はなくなり、
+                +            // 画面外へ溢れた分は物理挙動のままその場で動き、画面枠から落ちていきます。
+                +            function computeSpawnY() {
+                    +                return pendingNoteY;
+                    +            }
+                -            // --- 追加ここまで ---
+                +            // --- 変更ここまで ---
 
-            function computeSpawnY() {
-                const topY = getTopmostNoteY();
-                const THRESHOLD = 80; // この値より上（小さいY）にノートがあると上から溢れる扱いにする
-                if (topY <= THRESHOLD) {
-                    // 上空（キャンバス外）からランダム高さで落とす
-                    return - (20 + Math.random() * 120);
+                // 落下位置を示す縦線を描画
+                function drawGuideLine(ctx) {
+                    const h = render.options && render.options.height ? render.options.height : canvas.height;
+                    ctx.save();
+                    ctx.strokeStyle = 'rgba(85,85,255,0.6)';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([6, 6]);
+                    ctx.beginPath();
+                    ctx.moveTo(pendingNoteX, 0);
+                    ctx.lineTo(pendingNoteX, h);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.restore();
                 }
-                // 通常は仮音符の表示位置から落とす
-                return pendingNoteY;
-            }
-            // --- 追加ここまで ---
-
-            // 落下位置を示す縦線を描画
-            function drawGuideLine(ctx) {
-                const h = render.options && render.options.height ? render.options.height : canvas.height;
-                ctx.save();
-                ctx.strokeStyle = 'rgba(85,85,255,0.6)';
-                ctx.lineWidth = 2;
-                ctx.setLineDash([6, 6]);
-                ctx.beginPath();
-                ctx.moveTo(pendingNoteX, 0);
-                ctx.lineTo(pendingNoteX, h);
-                ctx.stroke();
-                ctx.setLineDash([]);
-                ctx.restore();
-            }
 
             // Render の描画後にガイド線と仮音符を描く
             Events.on(render, 'afterRender', function () {
